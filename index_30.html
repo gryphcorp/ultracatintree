@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Press Check">
+<meta name="theme-color" content="#0d0221">
+<title>Press Check</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0221; overflow-x: hidden; }
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+  #press-check-root {
+    --void: #0d0221;
+    --panel: #1b0c3f;
+    --panel-light: #2f1867;
+    --cyan: #00f0ff;
+    --magenta: #ff2e63;
+    --yellow: #ffe14d;
+    --green: #39ff88;
+    --danger: #ff2e63;
+    --text: #eafcff;
+    --grey: #8b8fc2;
+    --line: #4a1e7a;
+    /* legacy aliases so untouched rules still resolve */
+    --paper: var(--void);
+    --paper-dim: var(--panel);
+    --ink: var(--cyan);
+    --ink-soft: var(--text);
+
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    background: var(--void);
+    color: var(--text);
+    padding: 28px 24px 60px;
+    min-height: 100vh;
+    box-sizing: border-box;
+    position: relative;
+    overflow-x: hidden;
+    image-rendering: pixelated;
+    color-scheme: dark;
+  }
+  #press-check-root * { box-sizing: border-box; }
+  #press-check-root .mono { font-family: 'VT323', monospace; }
+  #press-check-root .pc-scanlines {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background: repeating-linear-gradient(180deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #press-check-root .pc-blink { animation: pc-blink 1s steps(1) infinite; }
+  }
+  @keyframes pc-blink { 50% { opacity: 0; } }
+
+  .pc-header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 4px solid var(--cyan); padding-bottom: 16px; margin-bottom: 22px; box-shadow: 0 4px 0 -2px var(--magenta); }
+  .pc-titleblock { display: flex; align-items: center; gap: 14px; }
+  .pc-regmark { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 0 4px var(--magenta)); }
+  .pc-title {
+    font-family: 'Press Start 2P', monospace; font-size: 22px; letter-spacing: 1px;
+    text-transform: uppercase; line-height: 1.4; margin: 0; color: var(--yellow);
+    text-shadow: 3px 3px 0 var(--magenta), 0 0 14px rgba(255,225,77,0.5);
+  }
+  .pc-subtitle { font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); margin-top: 6px; }
+  .pc-datestamp { font-family: 'VT323', monospace; font-size: 15px; color: var(--green); text-align: right; letter-spacing: 0.5px; text-shadow: 0 0 6px rgba(57,255,136,0.6); }
+
+  /* ---- Body layout: sidebar + main ---- */
+  .pc-body { display: flex; gap: 20px; align-items: flex-start; position: relative; z-index: 2; }
+  .pc-sidebar { width: 250px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .pc-main { flex: 1; min-width: 0; }
+
+  .pc-side-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 12px;
+    background: var(--panel);
+    border: 3px solid var(--cyan);
+    box-shadow: 4px 4px 0 #000, inset 0 0 0 2px var(--void);
+    cursor: pointer;
+    transition: transform .08s ease, opacity .15s ease;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .pc-side-row.active { background: var(--panel-light); border-color: var(--yellow); box-shadow: 4px 4px 0 #000, 0 0 12px rgba(255,225,77,0.6); }
+  .pc-side-row.active::before { content: "▶ "; color: var(--yellow); font-family: 'Press Start 2P', monospace; font-size: 10px; }
+  .pc-side-row.off { opacity: 0.4; border-color: var(--line); }
+  .pc-side-row.off .pc-side-text { cursor: default; }
+  .pc-side-text { display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; flex: 1 1 auto; }
+  .pc-side-num { font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--magenta); }
+  .pc-side-row.active .pc-side-num { color: var(--yellow); }
+  .pc-side-name { font-family: 'Press Start 2P', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: normal; overflow-wrap: break-word; word-break: break-word; }
+  .pc-side-count { font-size: 14px; color: var(--grey); font-family: 'VT323', monospace; overflow-wrap: break-word; word-break: break-word; }
+  .pc-side-row.active .pc-side-count { color: var(--cyan); }
+
+  .pc-switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .pc-switch input { opacity: 0; width: 0; height: 0; }
+  .pc-switch .track { position: absolute; inset: 0; background: #000; border: 2px solid var(--magenta); cursor: pointer; transition: background .15s ease; }
+  .pc-switch .track:before { content: ""; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: var(--magenta); transition: transform .1s steps(2); }
+  .pc-switch input:checked + .track { border-color: var(--green); }
+  .pc-switch input:checked + .track:before { transform: translateX(20px); background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+  .pc-stat { background: var(--panel); padding: 14px 16px; border: 3px solid var(--line); box-shadow: 3px 3px 0 #000; }
+  .pc-stat-label { font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--cyan); margin-bottom: 8px; line-height: 1.4; }
+  .pc-stat-value { font-family: 'VT323', monospace; font-size: 26px; font-weight: 400; color: var(--yellow); text-shadow: 0 0 8px rgba(255,225,77,0.5); }
+  .pc-stat-value.warn { color: var(--magenta); text-shadow: 0 0 8px rgba(255,46,99,0.6); }
+  .pc-stat-value.good { color: var(--green); text-shadow: 0 0 8px rgba(57,255,136,0.6); }
+
+  .pc-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .pc-sort-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pc-sort-label { font-family: 'Press Start 2P', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--magenta); }
+  select.pc-select { font-family: 'VT323', monospace; font-size: 15px; padding: 8px 30px 8px 10px; border: 3px solid var(--cyan); background-color: var(--void) !important; color: var(--text) !important; color-scheme: dark; -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--yellow) 50%), linear-gradient(135deg, var(--yellow) 50%, transparent 50%) !important; background-position: calc(100% - 18px) center, calc(100% - 13px) center !important; background-size: 5px 5px, 5px 5px !important; background-repeat: no-repeat, no-repeat !important; }
+  select.pc-select option { background: #000; color: var(--text); }
+  .pc-strategy-note { font-family: 'VT323', monospace; font-size: 14px; color: var(--grey); max-width: 340px; line-height: 1.4; }
+  button.pc-add-btn {
+    font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 0.5px;
+    background: var(--magenta); color: var(--void); border: 3px solid var(--yellow);
+    padding: 10px 14px; cursor: pointer; text-transform: uppercase;
+    box-shadow: 3px 3px 0 #000;
+  }
+  button.pc-add-btn:hover { background: var(--yellow); color: var(--void); }
+  button.pc-add-btn:active { transform: translate(3px,3px); box-shadow: 0 0 0 #000; }
+
+  .pc-manual-note { font-family: 'VT323', monospace; font-size: 14px; color: var(--yellow); background: var(--panel); border: 3px dashed var(--magenta); padding: 10px 14px; margin-bottom: 14px; line-height: 1.5; }
+
+  .pc-list { display: flex; flex-direction: column; gap: 12px; }
+  .pc-card { background: var(--panel); border: 3px solid var(--line); border-left: 8px solid var(--grey); padding: 14px 16px; display: grid; grid-template-columns: 1.4fr 1fr 0.7fr 0.7fr 0.9fr auto; align-items: center; gap: 16px; box-shadow: 4px 4px 0 #000; }
+  .pc-card.invest { grid-template-columns: 1.3fr 0.8fr 0.8fr 0.8fr 0.9fr auto; }
+  .pc-card.cash { grid-template-columns: 1.6fr 1fr 1fr auto; }
+  .pc-payoff-row {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+  .pc-payoff-item { display: flex; flex-direction: column; gap: 3px; }
+  .pc-payoff-item .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--grey); }
+  .pc-payoff-item .v { font-family: 'VT323', monospace; font-size: 16px; font-weight: 600; color: var(--text); }
+  .pc-payoff-item .v.gain-pos { color: var(--green); }
+  .pc-payoff-item .v.gain-neg { color: var(--danger); }
+  .pc-card.rank-1 { border-left-color: var(--magenta); box-shadow: 4px 4px 0 #000, 0 0 14px rgba(255,46,99,0.4); }
+  .pc-card.rank-2 { border-left-color: var(--yellow); }
+  .pc-card.rank-3 { border-left-color: var(--cyan); }
+  .pc-card.gain { border-left-color: var(--green); }
+  .pc-card.loss { border-left-color: var(--danger); }
+  .pc-card.cashok { border-left-color: var(--green); }
+  .pc-card.cashlow { border-left-color: var(--danger); }
+  .pc-card.bills { grid-template-columns: 1.6fr 1fr auto; border-left-color: var(--cyan); }
+  .pc-card.bills.paid { border-left-color: var(--green); opacity: 0.75; }
+  .pc-bills-section { margin-bottom: 26px; }
+  .pc-bills-head {
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
+    font-family: 'Press Start 2P', monospace; font-size: 11px; color: var(--yellow);
+    border-bottom: 2px solid var(--magenta); padding-bottom: 8px; margin-bottom: 12px;
+  }
+  .pc-bills-total { font-family: 'VT323', monospace; font-size: 16px; color: var(--text); }
+  .pc-card-name { display: flex; flex-direction: column; gap: 4px; }
+  .pc-card-name .nm { font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 12px; color: var(--text); }
+  .pc-card-name .l4 { font-family: 'VT323', monospace; font-size: 14px; color: var(--grey); }
+  .pc-rankbadge { font-family: 'Press Start 2P', monospace; font-size: 8px; color: var(--yellow); text-transform: uppercase; letter-spacing: 0.5px; }
+  .pc-bal-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .pc-bal-figures { display: flex; justify-content: space-between; font-family: 'VT323', monospace; font-size: 15px; color: var(--text); }
+  .pc-bal-bar { height: 12px; background: #000; border: 2px solid var(--line); overflow: hidden; }
+  .pc-bal-fill { height: 100%; background: var(--green); background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.3) 0, rgba(0,0,0,0.3) 2px, transparent 2px, transparent 6px); }
+  .pc-bal-fill.high { background-color: var(--danger); }
+  .pc-bal-fill.mid { background-color: var(--yellow); }
+  .pc-util-pct { font-size: 12px; color: var(--grey); font-family: 'VT323', monospace; }
+  .pc-metric { text-align: left; }
+  .pc-metric .k { font-family: 'Press Start 2P', monospace; font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cyan); margin-bottom: 5px; line-height: 1.4; }
+  .pc-metric .v { font-family: 'VT323', monospace; font-size: 17px; font-weight: 400; color: var(--text); }
+  .pc-metric .v.apr-high { color: var(--danger); }
+  .pc-metric .v.gain-pos { color: var(--green); }
+  .pc-metric .v.gain-neg { color: var(--danger); }
+  .pc-actions { display: flex; gap: 8px; }
+  .pc-icon-btn { background: var(--void); border: 2px solid var(--cyan); width: auto; height: 30px; padding: 0 8px; cursor: pointer; color: var(--cyan); font-family: 'Press Start 2P', monospace; font-size: 8px; display: flex; align-items: center; justify-content: center; }
+  .pc-icon-btn:hover { background: var(--cyan); color: var(--void); }
+
+  .pc-empty { text-align: center; padding: 60px 20px; color: var(--grey); border: 3px dashed var(--line); font-family: 'VT323', monospace; font-size: 16px; }
+  .pc-empty .big { font-family: 'Press Start 2P', monospace; font-size: 14px; color: var(--magenta); margin-bottom: 10px; text-transform: uppercase; }
+
+  .pc-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; min-height: 100%; background: rgba(13,2,33,0.9); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .pc-modal { background: var(--panel); border: 4px solid var(--cyan); width: 420px; max-width: 90vw; max-height: 88vh; overflow-y: auto; padding: 22px; box-shadow: 6px 6px 0 #000; }
+  .pc-modal h3 { font-family: 'Press Start 2P', monospace; text-transform: uppercase; font-size: 13px; margin: 0 0 16px 0; border-bottom: 3px solid var(--magenta); padding-bottom: 12px; color: var(--yellow); }
+  .pc-field { margin-bottom: 12px; }
+  .pc-field label { display: block; font-family: 'Press Start 2P', monospace; font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cyan); margin-bottom: 6px; line-height: 1.4; }
+  .pc-field input, .pc-field select { width: 100%; padding: 9px 10px; border: 2px solid var(--line); background-color: #000 !important; color: var(--text) !important; -webkit-text-fill-color: var(--text); font-family: 'VT323', monospace; font-size: 15px; color-scheme: dark; }
+  .pc-field select { -webkit-appearance: none; -moz-appearance: none; appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--yellow) 50%), linear-gradient(135deg, var(--yellow) 50%, transparent 50%) !important; background-position: calc(100% - 18px) center, calc(100% - 13px) center !important; background-size: 5px 5px, 5px 5px !important; background-repeat: no-repeat, no-repeat !important; }
+  .pc-field input::placeholder { color: var(--grey); opacity: 1; }
+  .pc-field input:-webkit-autofill,
+  .pc-field input:-webkit-autofill:hover,
+  .pc-field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text) !important;
+    -webkit-box-shadow: 0 0 0px 1000px #000 inset !important;
+    caret-color: var(--text) !important;
+  }
+  .pc-field select option { background: #000; color: var(--text); }
+  .pc-field input:focus, .pc-field select:focus { outline: none; border-color: var(--yellow); box-shadow: 0 0 8px rgba(255,225,77,0.5); }
+  .pc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pc-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .pc-btn-secondary { background: var(--void); border: 2px solid var(--grey); color: var(--grey); padding: 9px 16px; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .pc-btn-primary { background: var(--green); border: 2px solid var(--green); color: var(--void); padding: 9px 16px; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 3px 3px 0 #000; }
+  .pc-btn-primary:hover { background: var(--yellow); border-color: var(--yellow); }
+  .pc-btn-primary:active { transform: translate(3px,3px); box-shadow: 0 0 0 #000; }
+
+  .pc-toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel); color: var(--yellow); padding: 10px 18px; font-family: 'Press Start 2P', monospace; font-size: 9px; border: 3px solid var(--yellow); z-index: 60; opacity: 0; transition: opacity .25s ease; box-shadow: 4px 4px 0 #000; }
+  .pc-toast.show { opacity: 1; }
+
+  /* ---- Overall breakdown ---- */
+  .pc-overall { margin-top: 36px; border-top: 4px solid var(--magenta); padding-top: 20px; position: relative; z-index: 2; }
+  .pc-overall-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .pc-overall-title { font-family: 'Press Start 2P', monospace; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; margin: 0; color: var(--yellow); text-shadow: 2px 2px 0 var(--magenta); }
+  .pc-overall-sub { font-family: 'VT323', monospace; font-size: 14px; color: var(--grey); }
+  .pc-overall-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  .pc-overall-grid .pc-stat { background: var(--panel); }
+  .pc-networth-row { background: var(--void); border: 4px solid var(--yellow); box-shadow: 5px 5px 0 #000, 0 0 20px rgba(255,225,77,0.3); color: var(--text); padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .pc-networth-label { font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); }
+  .pc-networth-value { font-family: 'Press Start 2P', monospace; font-size: 22px; color: var(--yellow); text-shadow: 3px 3px 0 var(--magenta); }
+  .pc-networth-value.warn { color: var(--danger); text-shadow: 3px 3px 0 #000; }
+  .pc-networth-breakdown { display: flex; gap: 18px; flex-wrap: wrap; }
+  .pc-networth-item { font-family: 'VT323', monospace; font-size: 14px; color: var(--grey); }
+  .pc-networth-item b { color: var(--green); font-size: 17px; display: block; margin-top: 2px; }
+
+  /* ---- Login screen ---- */
+  .pc-login-screen { position: absolute; inset: 0; z-index: 40; background: var(--void); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .pc-login-box { width: 380px; max-width: 100%; background: var(--panel); border: 4px solid var(--cyan); box-shadow: 6px 6px 0 #000; padding: 28px; }
+  .pc-login-title { font-family: 'Press Start 2P', monospace; font-size: 20px; color: var(--yellow); text-shadow: 3px 3px 0 var(--magenta); margin: 0 0 8px; text-align: center; }
+  .pc-login-sub { font-family: 'VT323', monospace; font-size: 15px; color: var(--cyan); text-align: center; margin: 0 0 20px; }
+  .pc-login-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .pc-login-actions .pc-btn-primary, .pc-login-actions .pc-btn-secondary { flex: 1; }
+  .pc-login-error { font-family: 'VT323', monospace; color: var(--danger); font-size: 14px; margin-top: 8px; border: 2px dashed var(--danger); padding: 8px; }
+  .pc-login-note { font-family: 'VT323', monospace; font-size: 13px; color: var(--grey); margin-top: 16px; line-height: 1.4; }
+
+  .pc-account-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; justify-content: flex-end; }
+  .pc-account-email { font-family: 'VT323', monospace; font-size: 13px; color: var(--grey); }
+  #pc-logout-btn { width: auto; height: auto; padding: 6px 10px; font-size: 8px; }
+
+  @media (max-width: 780px) {
+    .pc-body { flex-direction: column; }
+    .pc-sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
+    .pc-side-row { flex: 1; min-width: 160px; }
+    .pc-summary { grid-template-columns: repeat(2, 1fr); }
+    .pc-overall-grid { grid-template-columns: repeat(2, 1fr); }
+    .pc-card { grid-template-columns: 1fr; gap: 10px; }
+    .pc-actions { justify-self: end; }
+  }
+
+  /* ---- Phone layout ---- */
+  @media (max-width: 560px) {
+    #press-check-root { padding: 14px 12px 40px; font-size: 15px; }
+
+    .pc-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .pc-header > div:last-child { text-align: left; width: 100%; }
+    .pc-account-row { justify-content: flex-start; }
+    .pc-title { font-size: 17px; }
+    .pc-subtitle { font-size: 13px; }
+
+    .pc-body { flex-direction: column; gap: 12px; width: 100%; max-width: 100%; }
+    .pc-sidebar { flex-direction: column; overflow-x: visible; width: 100%; max-width: 100%; gap: 8px; }
+    .pc-side-row { min-width: 0; width: 100%; max-width: 100%; gap: 8px; }
+    .pc-side-name { font-size: 10px; }
+    .pc-switch { width: 36px; height: 21px; flex-shrink: 0; }
+    .pc-switch .track:before { width: 13px; height: 13px; }
+    .pc-switch input:checked + .track:before { transform: translateX(15px); }
+
+    .pc-summary { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .pc-stat { padding: 10px 12px; min-width: 0; }
+    .pc-stat-label { font-size: 7px; }
+    .pc-stat-value { font-size: 17px; overflow-wrap: break-word; word-break: break-word; }
+
+    .pc-controls { flex-direction: column; align-items: stretch; }
+    .pc-sort-wrap { flex-direction: column; align-items: stretch; gap: 6px; }
+    select.pc-select { width: 100%; font-size: 14px; }
+    .pc-strategy-note { max-width: 100%; }
+    .pc-controls > div[style] { flex-wrap: wrap; }
+    .pc-controls > div[style] button { flex: 1; min-width: 90px; }
+
+    .pc-card { padding: 12px; gap: 10px; }
+    .pc-card-name .nm { font-size: 11px; }
+    .pc-metric .v { font-size: 15px; overflow-wrap: break-word; word-break: break-word; }
+    .pc-payoff-row { gap: 14px; }
+    .pc-payoff-item .v { font-size: 14px; }
+    .pc-actions { flex-direction: row; }
+
+    .pc-overall-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .pc-overall-grid .pc-stat-value { font-size: 15px; }
+    .pc-networth-row { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .pc-networth-value { font-size: 24px; overflow-wrap: break-word; word-break: break-word; }
+
+    .pc-modal { width: 100%; max-width: 100%; padding: 18px; }
+    .pc-row2 { grid-template-columns: 1fr; }
+
+    .pc-login-box { padding: 20px; }
+    .pc-login-title { font-size: 16px; }
+  }
+
+  /* Extra-narrow phones (SE, mini): give every number room by going full single column */
+  @media (max-width: 400px) {
+    .pc-summary { grid-template-columns: 1fr; }
+    .pc-overall-grid { grid-template-columns: 1fr; }
+    .pc-stat-value { font-size: 20px; }
+    .pc-overall-grid .pc-stat-value { font-size: 18px; }
+  }
+
+  /* Prevent iOS Safari from auto-zooming when a field is focused */
+  input, select { font-size: 16px !important; }
+</style>
+</head>
+<body>
+
+<div id="press-check-root">
+  <div class="pc-scanlines"></div>
+
+  <div id="pc-login-screen" class="pc-login-screen">
+    <div class="pc-login-box">
+      <p class="pc-login-title">Press Check</p>
+      <p class="pc-login-sub">Sign in to load your ledgers</p>
+      <div class="pc-field"><label>Email</label><input type="email" id="pc-login-email" autocomplete="email"></div>
+      <div class="pc-field"><label>Password</label><input type="password" id="pc-login-password" autocomplete="current-password"></div>
+      <div id="pc-login-error" class="pc-login-error" style="display:none"></div>
+      <div class="pc-login-actions">
+        <button class="pc-btn-primary" id="pc-signin-btn" style="flex:1">Sign in</button>
+      </div>
+      <p class="pc-login-note">Accounts are added by the owner in the Firebase console — there's no public sign-up here.</p>
+    </div>
+  </div>
+
+  <div id="pc-app-wrap" style="display:none">
+  <div class="pc-header">
+    <div class="pc-titleblock">
+      <svg class="pc-regmark" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="17" fill="none" stroke="#00f0ff" stroke-width="1.5"/>
+        <line x1="20" y1="1" x2="20" y2="39" stroke="#00f0ff" stroke-width="1.5"/>
+        <line x1="1" y1="20" x2="39" y2="20" stroke="#00f0ff" stroke-width="1.5"/>
+        <circle cx="20" cy="20" r="4" fill="#ff2e63"/>
+      </svg>
+      <div>
+        <p class="pc-title">Press Check</p>
+        <p class="pc-subtitle">Cards, cash &amp; investments <span class="pc-blink">▮</span></p>
+        <p class="pc-subtitle" style="color:var(--green); font-size:11px; margin-top:2px;">● LIVE — autosaves &amp; syncs automatically, no file needed</p>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="pc-datestamp" id="pc-datestamp"></div>
+      <div class="pc-account-row">
+        <span id="pc-account-email" class="pc-account-email"></span>
+        <button class="pc-icon-btn" id="pc-logout-btn">LOG OUT</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pc-body">
+    <div class="pc-sidebar" id="pc-sidebar">
+      <div class="pc-side-row active" data-group="personal" id="tab-personal">
+        <label class="pc-switch"><input type="checkbox" data-vis="personal" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 01</span>
+          <span class="pc-side-name">Griff CC</span>
+          <span class="pc-side-count" id="count-personal"></span>
+        </div>
+      </div>
+      <div class="pc-side-row" data-group="erin" id="tab-erin">
+        <label class="pc-switch"><input type="checkbox" data-vis="erin" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 02</span>
+          <span class="pc-side-name">Erin's CC</span>
+          <span class="pc-side-count" id="count-erin"></span>
+        </div>
+      </div>
+      <div class="pc-side-row" data-group="business" id="tab-business">
+        <label class="pc-switch"><input type="checkbox" data-vis="business" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 03</span>
+          <span class="pc-side-name">Green Parrot cards</span>
+          <span class="pc-side-count" id="count-business"></span>
+        </div>
+      </div>
+      <div class="pc-side-row" data-group="investments" id="tab-investments">
+        <label class="pc-switch"><input type="checkbox" data-vis="investments" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 04</span>
+          <span class="pc-side-name">Investments</span>
+          <span class="pc-side-count" id="count-investments"></span>
+        </div>
+      </div>
+      <div class="pc-side-row" data-group="checking" id="tab-checking">
+        <label class="pc-switch"><input type="checkbox" data-vis="checking" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 05</span>
+          <span class="pc-side-name">Checking — Regions</span>
+          <span class="pc-side-count" id="count-checking"></span>
+        </div>
+      </div>
+      <div class="pc-side-row" data-group="bills" id="tab-bills">
+        <label class="pc-switch"><input type="checkbox" data-vis="bills" checked><span class="track"></span></label>
+        <div class="pc-side-text">
+          <span class="pc-side-num">Ledger 06</span>
+          <span class="pc-side-name">Bills Due</span>
+          <span class="pc-side-count" id="count-bills"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pc-main">
+      <div class="pc-summary" id="pc-summary"></div>
+
+      <div class="pc-controls" id="pc-controls">
+        <div class="pc-sort-wrap">
+          <span class="pc-sort-label" id="pc-sort-label">Pay off order</span>
+          <select class="pc-select" id="pc-sort"></select>
+          <span class="pc-strategy-note" id="pc-strategy-note"></span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="pc-add-btn" id="pc-budget-btn" style="background:var(--void); color:var(--yellow); border:3px solid var(--yellow);" title="Set how much extra you can put toward debt each month">PAYOFF BUDGET</button>
+          <button class="pc-add-btn" id="pc-export-btn" style="background:var(--void); color:var(--green); border:3px solid var(--green);" title="Optional: download a personal backup copy">BACKUP COPY</button>
+          <button class="pc-add-btn" id="pc-import-btn" style="background:var(--void); color:var(--cyan); border:3px solid var(--cyan);" title="Optional: restore from a backup file">RESTORE COPY</button>
+          <button class="pc-add-btn" id="pc-add-btn">+ Add card</button>
+        </div>
+      </div>
+
+      <div id="pc-budget-note" class="pc-manual-note" style="display:none"></div>
+
+      <div id="pc-manual-note" class="pc-manual-note" style="display:none"></div>
+
+      <input type="file" id="pc-import-file" accept=".json" style="display:none">
+
+      <div id="pc-bills-controls" class="pc-controls" style="display:none">
+        <div class="pc-sort-wrap">
+          <span class="pc-sort-label">Pay amount</span>
+          <select class="pc-select" id="pc-pay-mode">
+            <option value="recommended">Recommended (min + avalanche extra)</option>
+            <option value="min">Minimum due only</option>
+          </select>
+          <span class="pc-strategy-note">Bills below use whichever amount you pick, from every ledger combined — sorted by which paycheck covers them.</span>
+        </div>
+        <button class="pc-add-btn" id="pc-add-fixedbill-btn" style="background:var(--magenta); color:var(--void); border:3px solid var(--yellow);">+ Add fixed bill</button>
+      </div>
+
+      <div class="pc-list" id="pc-list"></div>
+      <div id="pc-bills-view" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="pc-overall">
+    <div class="pc-overall-head">
+      <p class="pc-overall-title">Overall breakdown</p>
+      <span class="pc-overall-sub" id="pc-overall-asof"></span>
+    </div>
+    <div class="pc-overall-grid" id="pc-overall-grid"></div>
+    <div class="pc-networth-row" id="pc-networth-row"></div>
+  </div>
+  </div>
+
+  <div id="pc-modal-mount"></div>
+  <div class="pc-toast" id="pc-toast"></div>
+</div>
+
+<!-- Firebase (cloud storage + login) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+  // ======================================================
+  // PASTE YOUR FIREBASE CONFIG BELOW (from the Firebase console:
+  // Project settings > General > Your apps > SDK setup and config)
+  // ======================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyAQ71rSnkhnGICa1rBV7lH5EYyVf5Fb5tY",
+    authDomain: "how-low-can-you-go-26d98.firebaseapp.com",
+    projectId: "how-low-can-you-go-26d98",
+    storageBucket: "how-low-can-you-go-26d98.firebasestorage.app",
+    messagingSenderId: "1038075353526",
+    appId: "1:1038075353526:web:282527b7427ca7761c0917"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+
+<script>
+(function() {
+  const STORE_KEY = 'creditcards';
+  const INVEST_KEY = 'investments';
+  const CASH_KEY = 'checkingaccounts';
+  const VIS_KEY = 'ledgervisibility';
+  const LEDGER_DEFS = [
+    ['personal', 'Griff CC'],
+    ['erin', "Erin's CC"],
+    ['business', 'Green Parrot cards'],
+    ['investments', 'Investments'],
+    ['checking', 'Checking — Regions'],
+    ['bills', 'Bills Due']
+  ];
+  let cards = [];
+  let positions = [];
+  let cashAccounts = [];
+  let fixedBills = [];
+  let paidRecords = [];
+  let visibility = {};
+  let budget = { extraForDebt: 0 };
+  let activeGroup = 'personal';
+  let editingId = null;
+
+  const strategyNotes = {
+    avalanche: "★ Recommended — pays the least total interest over time. Minimums on everything, every extra dollar goes to the top card.",
+    duedate: "Keeps every payment on time — good when cash flow, not interest, is the pressure.",
+    utilization: "Pays down the card closest to its limit first, to protect your credit score.",
+    snowball: "Clears the smallest balance first for a quick win, then rolls that payment forward.",
+    mindue: "Prioritizes the card demanding the biggest minimum payment this cycle."
+  };
+  const cardSortOptions = [
+    ['avalanche', '★ Smartest (highest interest first)'],
+    ['duedate', 'Nearest due date first'],
+    ['utilization', 'Highest utilization first'],
+    ['snowball', 'Smallest balance first'],
+    ['mindue', 'Highest minimum due first']
+  ];
+  // Per-ledger sort choice — every card ledger starts on the smartest option (avalanche)
+  // until the person picks something else for that specific ledger.
+  const sortPrefs = { personal: 'avalanche', erin: 'avalanche', business: 'avalanche' };
+
+  const investNotes = {
+    value: "Largest positions by current market value first.",
+    gainpct: "Biggest winners first, by percent gain.",
+    losspct: "Biggest losers first — the ones furthest underwater.",
+    ticker: "Simple alphabetical order by ticker symbol."
+  };
+  const investSortOptions = [
+    ['value', 'Largest position first'],
+    ['gainpct', 'Biggest gain first'],
+    ['losspct', 'Biggest loss first'],
+    ['ticker', 'Ticker A–Z']
+  ];
+
+  const cashNotes = {
+    balance: "Largest cash balance first.",
+    updated: "Most recently updated balance first.",
+    name: "Alphabetical by account name."
+  };
+  const cashSortOptions = [
+    ['balance', 'Largest balance first'],
+    ['updated', 'Most recently updated first'],
+    ['name', 'Account name A–Z']
+  ];
+
+  function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function fmtPct(n) { const s = Number(n||0).toFixed(2) + '%'; return n > 0 ? '+' + s : s; }
+  function fmtDate(d) { if (!d) return '—'; const parts = d.split('-'); if (parts.length !== 3) return d; return `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`; }
+  function daysUntil(d) { if (!d) return Infinity; const target = new Date(d + 'T00:00:00'); const today = new Date(); today.setHours(0,0,0,0); return Math.round((target - today) / 86400000); }
+  function showToast(msg) { const t = document.getElementById('pc-toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
+  function uid() { return 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  let currentUid = null;
+  let unsubscribeLive = null;
+  const HOUSEHOLD_DOC = db.collection('presscheck_household').doc('main');
+
+  function attachLiveSync() {
+    if (unsubscribeLive) { unsubscribeLive(); unsubscribeLive = null; }
+    unsubscribeLive = HOUSEHOLD_DOC.onSnapshot((snap) => {
+      if (!snap.exists) return;
+      hideCloudError();
+      const data = snap.data();
+      cards = Array.isArray(data.cards) ? data.cards : [];
+      positions = Array.isArray(data.positions) ? data.positions : [];
+      cashAccounts = Array.isArray(data.cashAccounts) ? data.cashAccounts : [];
+      fixedBills = Array.isArray(data.fixedBills) ? data.fixedBills : fixedBills;
+      paidRecords = Array.isArray(data.paidRecords) ? data.paidRecords : paidRecords;
+      visibility = (data.visibility && typeof data.visibility === 'object') ? data.visibility : visibility;
+      budget = (data.budget && typeof data.budget === 'object') ? data.budget : budget;
+      if (typeof budget.extraForDebt !== 'number') budget.extraForDebt = 0;
+      LEDGER_DEFS.forEach(([g]) => { if (typeof visibility[g] !== 'boolean') visibility[g] = true; });
+      if (!visibility[activeGroup]) {
+        const firstVisible = LEDGER_DEFS.find(([g]) => visibility[g]);
+        activeGroup = firstVisible ? firstVisible[0] : LEDGER_DEFS[0][0];
+      }
+      render();
+    }, (err) => {
+      showCloudError('sync', err);
+    });
+  }
+
+  function defaultFixedBills() {
+    return [
+      { id: uid(), name: 'Mortgage (1st half)', amount: 1000, dueDay: 1 },
+      { id: uid(), name: 'Mortgage (2nd half)', amount: 1000, dueDay: 15 },
+      { id: uid(), name: 'Volvo lease', amount: 580, dueDay: 4 }
+    ];
+  }
+
+  async function loadFromCloud() {
+    try {
+      let snap = await HOUSEHOLD_DOC.get();
+      if (snap.exists) {
+        const data = snap.data();
+        cards = Array.isArray(data.cards) ? data.cards : [];
+        positions = Array.isArray(data.positions) ? data.positions : [];
+        cashAccounts = Array.isArray(data.cashAccounts) ? data.cashAccounts : [];
+        fixedBills = Array.isArray(data.fixedBills) ? data.fixedBills : defaultFixedBills();
+        paidRecords = Array.isArray(data.paidRecords) ? data.paidRecords : [];
+        visibility = (data.visibility && typeof data.visibility === 'object') ? data.visibility : {};
+        budget = (data.budget && typeof data.budget === 'object') ? data.budget : { extraForDebt: 0 };
+      } else {
+        // Nothing shared yet — check if this login has old private data to carry over.
+        const oldSnap = await db.collection('presscheck_users').doc(currentUid).get();
+        if (oldSnap.exists) {
+          const data = oldSnap.data();
+          cards = Array.isArray(data.cards) ? data.cards : [];
+          positions = Array.isArray(data.positions) ? data.positions : [];
+          cashAccounts = Array.isArray(data.cashAccounts) ? data.cashAccounts : [];
+          fixedBills = Array.isArray(data.fixedBills) ? data.fixedBills : defaultFixedBills();
+          paidRecords = Array.isArray(data.paidRecords) ? data.paidRecords : [];
+          visibility = (data.visibility && typeof data.visibility === 'object') ? data.visibility : {};
+          budget = (data.budget && typeof data.budget === 'object') ? data.budget : { extraForDebt: 0 };
+          await saveToCloud();
+          showToast('Your existing data is now shared for everyone');
+        } else {
+          cards = []; positions = []; cashAccounts = []; visibility = {}; budget = { extraForDebt: 0 };
+          fixedBills = defaultFixedBills(); paidRecords = [];
+        }
+      }
+    } catch (e) {
+      showCloudError('load', e);
+      cards = []; positions = []; cashAccounts = []; visibility = {}; budget = { extraForDebt: 0 };
+      fixedBills = defaultFixedBills(); paidRecords = [];
+    }
+    if (typeof budget.extraForDebt !== 'number') budget.extraForDebt = 0;
+    if (!Array.isArray(fixedBills)) fixedBills = defaultFixedBills();
+    if (!Array.isArray(paidRecords)) paidRecords = [];
+    LEDGER_DEFS.forEach(([g]) => { if (typeof visibility[g] !== 'boolean') visibility[g] = true; });
+    if (!visibility[activeGroup]) {
+      const firstVisible = LEDGER_DEFS.find(([g]) => visibility[g]);
+      activeGroup = firstVisible ? firstVisible[0] : LEDGER_DEFS[0][0];
+    }
+    render();
+  }
+
+  async function saveToCloud() {
+    if (!currentUid) return;
+    try {
+      await HOUSEHOLD_DOC.set({
+        cards, positions, cashAccounts, visibility, budget, fixedBills, paidRecords,
+        updatedAt: new Date().toISOString(),
+        updatedBy: (auth.currentUser && auth.currentUser.email) || currentUid
+      }, { merge: true });
+      hideCloudError();
+    } catch (e) {
+      showCloudError('save', e);
+    }
+  }
+
+  function showCloudError(kind, err) {
+    let banner = document.getElementById('pc-cloud-error-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'pc-cloud-error-banner';
+      banner.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:70;background:#3a0a14;border-bottom:4px solid var(--danger);color:#ffd1da;font-family:VT323,monospace;font-size:14px;padding:12px 16px;text-align:center;';
+      const root = document.getElementById('press-check-root');
+      root.insertBefore(banner, root.firstChild);
+    }
+    const isPermission = err && /permission/i.test(err.message || '');
+    banner.innerHTML = isPermission
+      ? `⚠ NOT SAVED — Firestore is blocking this ${kind}. The security rules need the "presscheck_household" permission published. Nothing you enter right now will stick until that's fixed.`
+      : `⚠ NOT SAVED — could not ${kind} your data (${(err && err.message) || 'connection problem'}). Changes may be lost on refresh.`;
+    banner.style.display = 'block';
+  }
+  function hideCloudError() {
+    const banner = document.getElementById('pc-cloud-error-banner');
+    if (banner) banner.style.display = 'none';
+  }
+  // All four ledgers now live in one shared cloud document, so every save writes the whole thing.
+  async function saveCards() { await saveToCloud(); }
+  async function savePositions() { await saveToCloud(); }
+  async function saveCash() { await saveToCloud(); }
+  async function saveVisibility() { await saveToCloud(); }
+
+  function sortedCards(list, strategy) {
+    const arr = [...list];
+    switch (strategy) {
+      case 'avalanche':
+        arr.sort((a,b) => {
+          const aprDiff = (b.apr||0) - (a.apr||0);
+          if (Math.abs(aprDiff) > 0.001) return aprDiff;
+          return (a.balance||0) - (b.balance||0); // tie: clear the smaller balance first
+        });
+        break;
+      case 'duedate': arr.sort((a,b) => daysUntil(a.dueDate) - daysUntil(b.dueDate)); break;
+      case 'utilization': arr.sort((a,b) => ((b.balance||0)/(b.limit||1)) - ((a.balance||0)/(a.limit||1))); break;
+      case 'snowball': arr.sort((a,b) => (a.balance||0) - (b.balance||0)); break;
+      case 'mindue': arr.sort((a,b) => (b.minDue||0) - (a.minDue||0)); break;
+    }
+    return arr;
+  }
+
+  const MAX_PAYOFF_MONTHS = 600; // 50-year cap so a bad input can't loop forever
+
+  // Time to pay off ONE card in isolation, paying only its own minimum each month.
+  function monthsMinOnly(card) {
+    let balance = Number(card.balance) || 0;
+    const rate = (Number(card.apr) || 0) / 100 / 12;
+    const payment = Number(card.minDue) || 0;
+    if (balance <= 0) return 0;
+    if (payment <= 0) return Infinity;
+    let months = 0;
+    while (balance > 0 && months < MAX_PAYOFF_MONTHS) {
+      const interest = balance * rate;
+      if (payment <= interest) return Infinity; // minimum doesn't even cover the interest — balance never shrinks
+      balance = balance + interest - payment;
+      months++;
+    }
+    return balance > 0 ? Infinity : months;
+  }
+
+  // Avalanche waterfall across every card in one ledger: everyone gets their minimum,
+  // then the extra monthly amount piles entirely onto whichever active card has the
+  // highest APR — once that one hits zero, the extra rolls onto the next highest, etc.
+  // Returns a Map of card.id -> months until THAT card reaches zero under this plan.
+  function avalancheMonthsByCard(cardList, extraPerMonth) {
+    const sim = cardList
+      .filter(c => (Number(c.balance) || 0) > 0)
+      .map(c => ({
+        id: c.id,
+        balance: Number(c.balance) || 0,
+        rate: (Number(c.apr) || 0) / 100 / 12,
+        minDue: Number(c.minDue) || 0
+      }));
+    const result = new Map();
+    cardList.forEach(c => { if ((Number(c.balance) || 0) <= 0) result.set(c.id, 0); });
+
+    let months = 0;
+    let stuck = false;
+    while (sim.some(c => c.balance > 0) && months < MAX_PAYOFF_MONTHS && !stuck) {
+      months++;
+      let extra = Number(extraPerMonth) || 0;
+      // Minimums first, on every still-open card.
+      sim.forEach(c => {
+        if (c.balance <= 0) return;
+        const interest = c.balance * c.rate;
+        const pay = Math.min(c.minDue, c.balance + interest);
+        if (pay <= interest && pay < c.balance + interest) {
+          // This card's minimum can't even keep up with interest on its own.
+          c.stuck = true;
+        }
+        c.balance = Math.max(0, c.balance + interest - pay);
+        if (c.balance <= 0 && !result.has(c.id)) result.set(c.id, months);
+      });
+      // Extra dollars cascade to the highest-APR card that's still open.
+      while (extra > 0) {
+        const target = sim.filter(c => c.balance > 0).sort((a,b) => b.rate - a.rate)[0];
+        if (!target) break;
+        const pay = Math.min(extra, target.balance);
+        target.balance -= pay;
+        extra -= pay;
+        if (target.balance <= 0 && !result.has(target.id)) result.set(target.id, months);
+      }
+      // If every remaining open card is stuck (minimum can't cover interest) and there's
+      // no extra to break the stalemate, stop — it will never finish.
+      if (sim.some(c => c.balance > 0 && c.stuck) && (Number(extraPerMonth) || 0) <= 0) stuck = true;
+    }
+    sim.forEach(c => { if (c.balance > 0 && !result.has(c.id)) result.set(c.id, Infinity); });
+    return result;
+  }
+
+  function fmtMonths(m) {
+    if (m === Infinity || m === undefined || m === null) return 'Never at this rate';
+    if (m === 0) return 'Paid off';
+    const years = Math.floor(m / 12);
+    const rem = m % 12;
+    if (years === 0) return `${rem} mo`;
+    if (rem === 0) return `${years} yr`;
+    return `${years} yr ${rem} mo`;
+  }
+
+  function currentMonthKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  // Which single card in a ledger is the current avalanche target (gets the extra $ this month).
+  function avalancheTargetId(ledgerCards) {
+    const open = ledgerCards.filter(c => (Number(c.balance)||0) > 0);
+    if (open.length === 0) return null;
+    open.sort((a,b) => {
+      const d = (b.apr||0) - (a.apr||0);
+      return Math.abs(d) > 0.001 ? d : (a.balance||0) - (b.balance||0);
+    });
+    return open[0].id;
+  }
+
+  function recommendedAmountForCard(card, ledgerCards) {
+    const minDue = Number(card.minDue) || 0;
+    const balance = Number(card.balance) || 0;
+    const extra = Number(budget.extraForDebt) || 0;
+    const isTarget = avalancheTargetId(ledgerCards) === card.id;
+    const proposed = isTarget ? minDue + extra : minDue;
+    return Math.min(proposed, balance); // never suggest paying more than what's owed
+  }
+
+  function dueDayOf(dateStr, fallback) {
+    if (!dateStr) return fallback;
+    const parts = dateStr.split('-');
+    return parts.length === 3 ? parseInt(parts[2], 10) : fallback;
+  }
+
+  function buildDueList(payMode) {
+    const month = currentMonthKey();
+    const paidKeysThisMonth = new Set(paidRecords.filter(r => r.month === month).map(r => r.key));
+    const items = [];
+
+    fixedBills.forEach(b => {
+      const key = `fixed-${b.id}-${month}`;
+      if (paidKeysThisMonth.has(key)) return;
+      items.push({
+        key, sourceType: 'fixed', sourceId: b.id, label: b.name,
+        amount: Number(b.amount) || 0, dueDay: Number(b.dueDay) || 1,
+        ledgerLabel: 'Fixed bill'
+      });
+    });
+
+    LEDGER_DEFS.filter(([g]) => g === 'personal' || g === 'erin' || g === 'business').forEach(([g, ledgerName]) => {
+      const ledgerCards = cards.filter(c => c.group === g && (Number(c.balance) || 0) > 0);
+      ledgerCards.forEach(c => {
+        if (!c.dueDate) return;
+        const key = `card-${c.id}-${month}`;
+        if (paidKeysThisMonth.has(key)) return;
+        const amount = payMode === 'min' ? (Number(c.minDue) || 0) : recommendedAmountForCard(c, ledgerCards);
+        items.push({
+          key, sourceType: 'card', sourceId: c.id, label: c.name,
+          amount, dueDay: dueDayOf(c.dueDate, 28),
+          ledgerLabel: ledgerName, ledgerGroup: g
+        });
+      });
+    });
+
+    items.forEach(it => { it.paycheck = it.dueDay <= 14 ? 'first' : 'second'; });
+    items.sort((a,b) => a.dueDay - b.dueDay);
+    return items;
+  }
+
+  async function markBillPaid(key) {
+    const month = currentMonthKey();
+    const payMode = document.getElementById('pc-pay-mode') ? document.getElementById('pc-pay-mode').value : 'recommended';
+    const list = buildDueList(payMode);
+    const item = list.find(i => i.key === key);
+    if (!item) return;
+
+    if (item.sourceType === 'card') {
+      cards = cards.map(c => c.id === item.sourceId
+        ? { ...c, balance: Math.max(0, (Number(c.balance)||0) - item.amount) }
+        : c);
+    }
+    paidRecords.push({
+      key: item.key, month, sourceType: item.sourceType, sourceId: item.sourceId,
+      label: item.label, ledgerLabel: item.ledgerLabel, amount: item.amount,
+      dueDay: item.dueDay, paycheck: item.paycheck, paidAt: new Date().toISOString()
+    });
+    await saveToCloud();
+    render();
+    showToast(`${item.label} marked paid`);
+  }
+
+  async function undoBillPaid(key) {
+    const record = paidRecords.find(r => r.key === key);
+    if (!record) return;
+    if (record.sourceType === 'card') {
+      cards = cards.map(c => c.id === record.sourceId
+        ? { ...c, balance: (Number(c.balance)||0) + record.amount }
+        : c);
+    }
+    paidRecords = paidRecords.filter(r => r.key !== key);
+    await saveToCloud();
+    render();
+    showToast('Payment undone');
+  }
+
+  function positionMetrics(p) {
+    const value = (p.shares||0) * (p.currentPrice||0);
+    const cost = (p.shares||0) * (p.costBasis||0);
+    const gain = value - cost;
+    const gainPct = cost > 0 ? (gain / cost * 100) : 0;
+    return { value, cost, gain, gainPct };
+  }
+  function sortedPositions(list, strategy) {
+    const arr = [...list];
+    switch (strategy) {
+      case 'value': arr.sort((a,b) => positionMetrics(b).value - positionMetrics(a).value); break;
+      case 'gainpct': arr.sort((a,b) => positionMetrics(b).gainPct - positionMetrics(a).gainPct); break;
+      case 'losspct': arr.sort((a,b) => positionMetrics(a).gainPct - positionMetrics(b).gainPct); break;
+      case 'ticker': arr.sort((a,b) => (a.ticker||'').localeCompare(b.ticker||'')); break;
+    }
+    return arr;
+  }
+
+  function sortedCash(list, strategy) {
+    const arr = [...list];
+    switch (strategy) {
+      case 'balance': arr.sort((a,b) => (b.balance||0) - (a.balance||0)); break;
+      case 'updated': arr.sort((a,b) => new Date(b.asOf||0) - new Date(a.asOf||0)); break;
+      case 'name': arr.sort((a,b) => (a.name||'').localeCompare(b.name||'')); break;
+    }
+    return arr;
+  }
+
+  function renderCardSummary(list) {
+    const totalOwed = list.reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const totalLimit = list.reduce((s,c) => s + (Number(c.limit)||0), 0);
+    const totalMinDue = list.reduce((s,c) => s + (Number(c.minDue)||0), 0);
+    const util = totalLimit > 0 ? (totalOwed/totalLimit*100) : 0;
+    document.getElementById('pc-summary').innerHTML = `
+      <div class="pc-stat"><div class="pc-stat-label">Total owed</div><div class="pc-stat-value">${fmtMoney(totalOwed)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Total credit limit</div><div class="pc-stat-value">${fmtMoney(totalLimit)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Overall utilization</div><div class="pc-stat-value ${util>50?'warn':''}">${util.toFixed(1)}%</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Total due this cycle</div><div class="pc-stat-value">${fmtMoney(totalMinDue)}</div></div>`;
+  }
+  function renderInvestSummary(list) {
+    let totalValue = 0, totalCost = 0;
+    list.forEach(p => { const m = positionMetrics(p); totalValue += m.value; totalCost += m.cost; });
+    const totalGain = totalValue - totalCost;
+    const totalGainPct = totalCost > 0 ? (totalGain/totalCost*100) : 0;
+    document.getElementById('pc-summary').innerHTML = `
+      <div class="pc-stat"><div class="pc-stat-label">Current value</div><div class="pc-stat-value">${fmtMoney(totalValue)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Total invested</div><div class="pc-stat-value">${fmtMoney(totalCost)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Gain / loss</div><div class="pc-stat-value ${totalGain>=0?'good':'warn'}">${totalGain>=0?'+':''}${fmtMoney(totalGain)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Return</div><div class="pc-stat-value ${totalGainPct>=0?'good':'warn'}">${fmtPct(totalGainPct)}</div></div>`;
+  }
+  function renderCashSummary(list) {
+    const total = list.reduce((s,a) => s + (Number(a.balance)||0), 0);
+    const mostRecent = list.reduce((latest,a) => { const d = new Date(a.asOf||0); return d > latest ? d : latest; }, new Date(0));
+    const lowAny = list.some(a => (a.targetMin || 0) > 0 && (a.balance||0) < (a.targetMin||0));
+    document.getElementById('pc-summary').innerHTML = `
+      <div class="pc-stat"><div class="pc-stat-label">Total cash</div><div class="pc-stat-value ${lowAny?'warn':'good'}">${fmtMoney(total)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Accounts tracked</div><div class="pc-stat-value">${list.length}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Last updated</div><div class="pc-stat-value" style="font-size:15px">${mostRecent.getTime() ? fmtDate(mostRecent.toISOString().slice(0,10)) : '—'}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Below target minimum</div><div class="pc-stat-value ${lowAny?'warn':'good'}">${lowAny ? 'Yes' : 'No'}</div></div>`;
+  }
+
+  function populateSortSelect() {
+    const sel = document.getElementById('pc-sort');
+    const label = document.getElementById('pc-sort-label');
+    let options, labelText, desiredValue;
+    if (activeGroup === 'investments') { options = investSortOptions; labelText = 'Sort by'; desiredValue = sel.value; }
+    else if (activeGroup === 'checking') { options = cashSortOptions; labelText = 'Sort by'; desiredValue = sel.value; }
+    else { options = cardSortOptions; labelText = 'Pay off order'; desiredValue = sortPrefs[activeGroup] || 'avalanche'; }
+    label.textContent = labelText;
+    sel.innerHTML = options.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+    const valid = options.some(([v]) => v === desiredValue);
+    sel.value = valid ? desiredValue : options[0][0];
+  }
+
+  function render() {
+    document.getElementById('pc-datestamp').textContent =
+      'AS OF ' + new Date().toLocaleDateString('en-US', {month:'short', day:'2-digit', year:'numeric'}).toUpperCase();
+
+    const personalCards = cards.filter(c => c.group === 'personal');
+    const erinCards = cards.filter(c => c.group === 'erin');
+    const businessCards = cards.filter(c => c.group === 'business');
+    const personalDebtNow = personalCards.reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const erinDebtNow = erinCards.reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const businessDebtNow = businessCards.reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const investValueNow = positions.reduce((s,p) => s + positionMetrics(p).value, 0);
+    const checkingTotalNow = cashAccounts.reduce((s,a) => s + (Number(a.balance)||0), 0);
+
+    document.getElementById('count-personal').textContent = `${fmtMoney(personalDebtNow)} owed · ${personalCards.length} card(s)`;
+    document.getElementById('count-erin').textContent = `${fmtMoney(erinDebtNow)} owed · ${erinCards.length} card(s)`;
+    document.getElementById('count-business').textContent = `${fmtMoney(businessDebtNow)} owed · ${businessCards.length} card(s)`;
+    document.getElementById('count-investments').textContent = `${fmtMoney(investValueNow)} value · ${positions.length} position(s)`;
+    document.getElementById('count-checking').textContent = `${fmtMoney(checkingTotalNow)} balance · ${cashAccounts.length} account(s)`;
+    const dueNow = buildDueList('recommended');
+    const dueTotalNow = dueNow.reduce((s,i) => s + i.amount, 0);
+    document.getElementById('count-bills').textContent = `${fmtMoney(dueTotalNow)} due · ${dueNow.length} bill(s)`;
+
+    LEDGER_DEFS.forEach(([g]) => {
+      const row = document.getElementById('tab-' + g);
+      row.classList.toggle('active', activeGroup === g);
+      row.classList.toggle('off', !visibility[g]);
+    });
+
+    const addLabels = { investments: '+ Add position', checking: '+ Add account' };
+    document.getElementById('pc-add-btn').textContent = addLabels[activeGroup] || '+ Add card';
+
+    const noteEl = document.getElementById('pc-manual-note');
+    if (activeGroup === 'investments') {
+      noteEl.style.display = 'block';
+      noteEl.textContent = "Robinhood isn't connected — there's no live sync here. Enter your positions manually and update the current price whenever you check your account.";
+    } else if (activeGroup === 'checking') {
+      noteEl.style.display = 'block';
+      noteEl.textContent = "There's no real-time link to Regions available — I can't log into online banking on your behalf, and no bank-linking connector is set up yet. Enter the balance manually and update it whenever you check the account.";
+    } else {
+      noteEl.style.display = 'none';
+    }
+
+    const isCardLedger = (activeGroup === 'personal' || activeGroup === 'erin' || activeGroup === 'business');
+    document.getElementById('pc-budget-btn').style.display = isCardLedger ? '' : 'none';
+    const budgetNoteEl = document.getElementById('pc-budget-note');
+    if (isCardLedger) {
+      const extra = Number(budget.extraForDebt) || 0;
+      budgetNoteEl.style.display = 'block';
+      if (extra > 0) {
+        budgetNoteEl.innerHTML = `Payoff plan: minimums on everything, plus <b>${fmtMoney(extra)}/month extra</b> aimed at the highest-interest card in this ledger. Tap "PAYOFF BUDGET" to change that amount.`;
+      } else {
+        budgetNoteEl.innerHTML = `No extra monthly amount set yet — the "Recommended" payoff time below just matches minimum payments. Tap "PAYOFF BUDGET" to set how much extra you can commit each month and see how much faster that clears your debt.`;
+      }
+    } else {
+      budgetNoteEl.style.display = 'none';
+    }
+
+    if (activeGroup === 'bills') {
+      document.getElementById('pc-controls').style.display = 'none';
+      document.getElementById('pc-bills-controls').style.display = '';
+      document.getElementById('pc-list').style.display = 'none';
+      document.getElementById('pc-bills-view').style.display = '';
+      renderBillsSummary();
+      renderBillsView();
+    } else {
+      document.getElementById('pc-controls').style.display = '';
+      document.getElementById('pc-bills-controls').style.display = 'none';
+      document.getElementById('pc-list').style.display = '';
+      document.getElementById('pc-bills-view').style.display = 'none';
+
+      populateSortSelect();
+      const strategy = document.getElementById('pc-sort').value;
+      document.getElementById('pc-strategy-note').textContent =
+        activeGroup === 'investments' ? investNotes[strategy] :
+        activeGroup === 'checking' ? cashNotes[strategy] : strategyNotes[strategy];
+
+      if (activeGroup === 'investments') { renderInvestSummary(positions); renderInvestList(strategy); }
+      else if (activeGroup === 'checking') { renderCashSummary(cashAccounts); renderCashList(strategy); }
+      else { const groupCards = cards.filter(c => c.group === activeGroup); renderCardSummary(groupCards); renderCardList(groupCards, strategy); }
+    }
+
+    renderOverall();
+  }
+
+  function renderBillsSummary() {
+    const dueList = buildDueList(document.getElementById('pc-pay-mode') ? document.getElementById('pc-pay-mode').value : 'recommended');
+    const firstTotal = dueList.filter(i => i.paycheck === 'first').reduce((s,i) => s + i.amount, 0);
+    const secondTotal = dueList.filter(i => i.paycheck === 'second').reduce((s,i) => s + i.amount, 0);
+    const paidTotal = paidRecords.filter(r => r.month === currentMonthKey()).reduce((s,r) => s + r.amount, 0);
+    const totalAllDebt = cards.reduce((s,c) => s + (Number(c.balance)||0), 0);
+    document.getElementById('pc-summary').innerHTML = `
+      <div class="pc-stat"><div class="pc-stat-label">Due from 1st paycheck</div><div class="pc-stat-value ${firstTotal>2800?'warn':''}">${fmtMoney(firstTotal)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Due from 15th paycheck</div><div class="pc-stat-value ${secondTotal>2800?'warn':''}">${fmtMoney(secondTotal)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Paid this month</div><div class="pc-stat-value good">${fmtMoney(paidTotal)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Total debt (all ledgers)</div><div class="pc-stat-value warn">${fmtMoney(totalAllDebt)}</div></div>`;
+  }
+
+  function renderOverall() {
+    const personalDebt = cards.filter(c => c.group === 'personal').reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const erinDebt = cards.filter(c => c.group === 'erin').reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const businessDebt = cards.filter(c => c.group === 'business').reduce((s,c) => s + (Number(c.balance)||0), 0);
+    const totalDebt = personalDebt + erinDebt + businessDebt;
+
+    let investValue = 0;
+    positions.forEach(p => { investValue += positionMetrics(p).value; });
+
+    const totalCash = cashAccounts.reduce((s,a) => s + (Number(a.balance)||0), 0);
+    const netWorth = totalCash + investValue - totalDebt;
+
+    document.getElementById('pc-overall-asof').textContent =
+      'AS OF ' + new Date().toLocaleDateString('en-US', {month:'short', day:'2-digit', year:'numeric'}).toUpperCase();
+
+    document.getElementById('pc-overall-grid').innerHTML = `
+      <div class="pc-stat"><div class="pc-stat-label">Griff card debt</div><div class="pc-stat-value ${personalDebt>0?'warn':''}">${fmtMoney(personalDebt)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Erin's card debt</div><div class="pc-stat-value ${erinDebt>0?'warn':''}">${fmtMoney(erinDebt)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Green Parrot card debt</div><div class="pc-stat-value ${businessDebt>0?'warn':''}">${fmtMoney(businessDebt)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Checking balance</div><div class="pc-stat-value good">${fmtMoney(totalCash)}</div></div>
+      <div class="pc-stat"><div class="pc-stat-label">Investments value</div><div class="pc-stat-value good">${fmtMoney(investValue)}</div></div>`;
+
+    document.getElementById('pc-networth-row').innerHTML = `
+      <div>
+        <div class="pc-networth-label">Net position</div>
+        <div class="pc-networth-value ${netWorth<0?'warn':''}">${netWorth<0?'-':''}${fmtMoney(Math.abs(netWorth))}</div>
+      </div>
+      <div class="pc-networth-breakdown">
+        <div class="pc-networth-item">Cash + investments<b>${fmtMoney(totalCash + investValue)}</b></div>
+        <div class="pc-networth-item">Total card debt<b>${fmtMoney(totalDebt)}</b></div>
+      </div>`;
+  }
+
+  function renderCardList(groupCards, strategy) {
+    const sorted = sortedCards(groupCards, strategy);
+    const listEl = document.getElementById('pc-list');
+    if (sorted.length === 0) {
+      const groupLabel = activeGroup === 'personal' ? 'Griff' : (activeGroup === 'erin' ? "Erin's" : 'Green Parrot Printing');
+      listEl.innerHTML = `<div class="pc-empty"><div class="big">NO DATA FOUND</div><div>Add a ${groupLabel} card to continue.</div></div>`;
+      return;
+    }
+    const extra = Number(budget.extraForDebt) || 0;
+    const avalancheMonths = avalancheMonthsByCard(groupCards, extra);
+    listEl.innerHTML = sorted.map((c, i) => {
+      const util = c.limit > 0 ? (c.balance / c.limit * 100) : 0;
+      const fillClass = util >= 80 ? 'high' : (util >= 50 ? 'mid' : '');
+      const rankClass = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : (i === 2 ? 'rank-3' : ''));
+      const dtu = daysUntil(c.dueDate);
+      let dueLabel = fmtDate(c.dueDate);
+      if (c.dueDate && dtu <= 5 && dtu >= 0) dueLabel += ' ⚠';
+      if (c.dueDate && dtu < 0) dueLabel += ' (late)';
+      const minMonths = monthsMinOnly(c);
+      const recMonths = avalancheMonths.get(c.id);
+      const minNever = minMonths === Infinity;
+      const recNever = recMonths === Infinity || recMonths === undefined;
+      return `
+      <div class="pc-card ${rankClass}">
+        <div class="pc-card-name">
+          <span class="pc-rankbadge">${i === 0 ? 'Pay first' : '#' + (i+1) + ' in line'}</span>
+          <span class="nm">${escapeHtml(c.name)}</span>
+          <span class="l4 mono">•••• ${escapeHtml(c.last4 || '----')}</span>
+        </div>
+        <div class="pc-bal-wrap">
+          <div class="pc-bal-figures"><span>${fmtMoney(c.balance)}</span><span class="pc-util-pct">of ${fmtMoney(c.limit)}</span></div>
+          <div class="pc-bal-bar"><div class="pc-bal-fill ${fillClass}" style="width:${Math.min(util,100)}%"></div></div>
+          <div class="pc-util-pct">${util.toFixed(0)}% utilized</div>
+        </div>
+        <div class="pc-metric"><div class="k">APR</div><div class="v ${c.apr>=22?'apr-high':''}">${Number(c.apr||0).toFixed(2)}%</div></div>
+        <div class="pc-metric"><div class="k">Min due</div><div class="v">${fmtMoney(c.minDue)}</div></div>
+        <div class="pc-metric"><div class="k">Due date</div><div class="v" style="font-size:12px">${dueLabel}</div></div>
+        <div class="pc-actions"><button class="pc-icon-btn" data-edit="${c.id}" title="Edit">EDIT</button><button class="pc-icon-btn" data-del="${c.id}" title="Delete">DEL</button></div>
+        <div class="pc-payoff-row">
+          <div class="pc-payoff-item"><span class="k">⏱ Min payments only</span><span class="v ${minNever?'gain-neg':''}">${fmtMonths(minMonths)}</span></div>
+          <div class="pc-payoff-item"><span class="k">🚀 Recommended${extra>0?` (+${fmtMoney(extra)}/mo)`:''}</span><span class="v ${recNever?'gain-neg':'gain-pos'}">${fmtMonths(recMonths)}</span></div>
+        </div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.edit)));
+    listEl.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteItem(btn.dataset.del)));
+  }
+
+  function renderInvestList(strategy) {
+    const sorted = sortedPositions(positions, strategy);
+    const listEl = document.getElementById('pc-list');
+    if (sorted.length === 0) {
+      listEl.innerHTML = `<div class="pc-empty"><div class="big">NO DATA FOUND</div><div>Add a stock position to continue.</div></div>`;
+      return;
+    }
+    listEl.innerHTML = sorted.map(p => {
+      const m = positionMetrics(p);
+      const rowClass = m.gain > 0 ? 'gain' : (m.gain < 0 ? 'loss' : '');
+      return `
+      <div class="pc-card invest ${rowClass}">
+        <div class="pc-card-name">
+          <span class="pc-rankbadge">${escapeHtml(p.account || 'Robinhood')}</span>
+          <span class="nm">${escapeHtml((p.ticker||'').toUpperCase())}</span>
+          <span class="l4 mono">${Number(p.shares||0)} sh @ ${fmtMoney(p.costBasis)} avg</span>
+        </div>
+        <div class="pc-metric"><div class="k">Current price</div><div class="v">${fmtMoney(p.currentPrice)}</div></div>
+        <div class="pc-metric"><div class="k">Market value</div><div class="v">${fmtMoney(m.value)}</div></div>
+        <div class="pc-metric"><div class="k">Cost basis</div><div class="v">${fmtMoney(m.cost)}</div></div>
+        <div class="pc-metric"><div class="k">Gain / loss</div><div class="v ${m.gain>=0?'gain-pos':'gain-neg'}">${m.gain>=0?'+':''}${fmtMoney(m.gain)}<br><span style="font-size:11px">${fmtPct(m.gainPct)}</span></div></div>
+        <div class="pc-actions"><button class="pc-icon-btn" data-edit="${p.id}" title="Edit">EDIT</button><button class="pc-icon-btn" data-del="${p.id}" title="Delete">DEL</button></div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.edit)));
+    listEl.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteItem(btn.dataset.del)));
+  }
+
+  function renderCashList(strategy) {
+    const sorted = sortedCash(cashAccounts, strategy);
+    const listEl = document.getElementById('pc-list');
+    if (sorted.length === 0) {
+      listEl.innerHTML = `<div class="pc-empty"><div class="big">NO DATA FOUND</div><div>Add your Regions checking account to continue.</div></div>`;
+      return;
+    }
+    listEl.innerHTML = sorted.map(a => {
+      const low = (a.targetMin || 0) > 0 && (a.balance||0) < (a.targetMin||0);
+      return `
+      <div class="pc-card cash ${low ? 'cashlow' : 'cashok'}">
+        <div class="pc-card-name">
+          <span class="pc-rankbadge">${escapeHtml(a.bank || 'Regions')}</span>
+          <span class="nm">${escapeHtml(a.name)}</span>
+          <span class="l4 mono">•••• ${escapeHtml(a.last4 || '----')}</span>
+        </div>
+        <div class="pc-metric"><div class="k">Balance</div><div class="v ${low?'gain-neg':''}">${fmtMoney(a.balance)}</div></div>
+        <div class="pc-metric"><div class="k">As of</div><div class="v" style="font-size:12px">${fmtDate(a.asOf)}</div></div>
+        <div class="pc-actions"><button class="pc-icon-btn" data-edit="${a.id}" title="Edit">EDIT</button><button class="pc-icon-btn" data-del="${a.id}" title="Delete">DEL</button></div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.edit)));
+    listEl.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteItem(btn.dataset.del)));
+  }
+
+  function renderBillsView() {
+    const payMode = document.getElementById('pc-pay-mode').value;
+    const dueList = buildDueList(payMode);
+    const firstCheck = dueList.filter(i => i.paycheck === 'first');
+    const secondCheck = dueList.filter(i => i.paycheck === 'second');
+    const paycheckAmt = 2800;
+
+    const dueRow = (item) => `
+      <div class="pc-card bills">
+        <div class="pc-card-name">
+          <span class="pc-rankbadge">${escapeHtml(item.ledgerLabel)}</span>
+          <span class="nm">${escapeHtml(item.label)}</span>
+          <span class="l4 mono">Due on the ${item.dueDay}${ordinalSuffix(item.dueDay)}</span>
+        </div>
+        <div class="pc-metric"><div class="k">Amount</div><div class="v">${fmtMoney(item.amount)}</div></div>
+        <div class="pc-actions">
+          ${item.sourceType === 'fixed' ? `<button class="pc-icon-btn" data-editfixed="${item.sourceId}" title="Edit">EDIT</button>` : ''}
+          <button class="pc-btn-primary pc-paid-btn" data-paid="${item.key}" style="font-size:9px;padding:8px 12px;">✓ PAID</button>
+        </div>
+      </div>`;
+
+    function bucket(title, list, checkNum) {
+      const total = list.reduce((s,i) => s + i.amount, 0);
+      const over = total > paycheckAmt;
+      if (list.length === 0) {
+        return `<div class="pc-bills-section">
+          <div class="pc-bills-head"><span>${title}</span><span class="pc-bills-total">Nothing due — all clear</span></div>
+        </div>`;
+      }
+      return `<div class="pc-bills-section">
+        <div class="pc-bills-head">
+          <span>${title}</span>
+          <span class="pc-bills-total ${over?'gain-neg':'gain-pos'}">${fmtMoney(total)} of ~${fmtMoney(paycheckAmt)} check${over?' — over budget!':''}</span>
+        </div>
+        <div class="pc-list">${list.map(dueRow).join('')}</div>
+      </div>`;
+    }
+
+    const paidThisMonth = paidRecords.filter(r => r.month === currentMonthKey());
+    const paidTotal = paidThisMonth.reduce((s,r) => s + r.amount, 0);
+    const paidRow = (r) => `
+      <div class="pc-card bills paid">
+        <div class="pc-card-name">
+          <span class="pc-rankbadge">${escapeHtml(r.ledgerLabel || '')}</span>
+          <span class="nm">${escapeHtml(r.label)}</span>
+          <span class="l4 mono">Paid ${fmtDate(r.paidAt.slice(0,10))}</span>
+        </div>
+        <div class="pc-metric"><div class="k">Amount</div><div class="v gain-pos">${fmtMoney(r.amount)}</div></div>
+        <div class="pc-actions"><button class="pc-icon-btn" data-undo="${r.key}" title="Undo">UNDO</button></div>
+      </div>`;
+
+    const view = document.getElementById('pc-bills-view');
+    view.innerHTML = `
+      ${bucket('DUE — PAY FROM 1ST PAYCHECK', firstCheck, 1)}
+      ${bucket('DUE — PAY FROM 15TH PAYCHECK', secondCheck, 2)}
+      <div class="pc-bills-section">
+        <div class="pc-bills-head"><span>✓ PAID THIS MONTH</span><span class="pc-bills-total gain-pos">${fmtMoney(paidTotal)}</span></div>
+        ${paidThisMonth.length === 0
+          ? `<div class="pc-empty" style="padding:24px;"><div>Nothing marked paid yet this month.</div></div>`
+          : `<div class="pc-list">${paidThisMonth.map(paidRow).join('')}</div>`}
+      </div>
+    `;
+    view.querySelectorAll('[data-paid]').forEach(btn => btn.addEventListener('click', () => markBillPaid(btn.dataset.paid)));
+    view.querySelectorAll('[data-undo]').forEach(btn => btn.addEventListener('click', () => undoBillPaid(btn.dataset.undo)));
+    view.querySelectorAll('[data-editfixed]').forEach(btn => btn.addEventListener('click', () => openFixedBillModal(btn.dataset.editfixed)));
+  }
+
+  function ordinalSuffix(n) {
+    if (n >= 11 && n <= 13) return 'th';
+    switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+  }
+
+
+  async function deleteItem(id) {
+    if (activeGroup === 'investments') { positions = positions.filter(p => p.id !== id); await savePositions(); showToast('Position removed'); }
+    else if (activeGroup === 'checking') { cashAccounts = cashAccounts.filter(a => a.id !== id); await saveCash(); showToast('Account removed'); }
+    else { cards = cards.filter(c => c.id !== id); await saveCards(); showToast('Card removed'); }
+    render();
+  }
+
+  function openModal(id) {
+    editingId = id || null;
+    if (activeGroup === 'investments') openInvestModal(id);
+    else if (activeGroup === 'checking') openCashModal(id);
+    else openCardModal(id);
+  }
+
+  function openCardModal(id) {
+    const existing = id ? cards.find(c => c.id === id) : null;
+    const mount = document.getElementById('pc-modal-mount');
+    mount.innerHTML = `
+      <div class="pc-overlay" id="pc-overlay"><div class="pc-modal">
+        <h3>${existing ? 'Edit card' : 'Add a card'}</h3>
+        <div class="pc-field"><label>Card name</label><input type="text" id="f-name" placeholder="e.g. Chase Ink Business" value="${existing ? escapeHtml(existing.name) : ''}"></div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Last 4 digits</label><input type="text" id="f-last4" maxlength="4" placeholder="1234" value="${existing ? escapeHtml(existing.last4) : ''}"></div>
+          <div class="pc-field"><label>Belongs to</label><select id="f-group">
+            <option value="personal" ${(!existing && activeGroup==='personal') || (existing && existing.group==='personal') ? 'selected':''}>Griff CC</option>
+            <option value="erin" ${(!existing && activeGroup==='erin') || (existing && existing.group==='erin') ? 'selected':''}>Erin's CC</option>
+            <option value="business" ${(!existing && activeGroup==='business') || (existing && existing.group==='business') ? 'selected':''}>Green Parrot Printing</option>
+          </select></div>
+        </div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Balance owed ($)</label><input type="number" step="0.01" id="f-balance" value="${existing ? existing.balance : ''}"></div>
+          <div class="pc-field"><label>Credit limit ($)</label><input type="number" step="0.01" id="f-limit" value="${existing ? existing.limit : ''}"></div>
+        </div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Interest rate — APR (%)</label><input type="number" step="0.01" id="f-apr" value="${existing ? existing.apr : ''}"></div>
+          <div class="pc-field"><label>Minimum due ($)</label><input type="number" step="0.01" id="f-mindue" value="${existing ? existing.minDue : ''}"></div>
+        </div>
+        <div class="pc-field"><label>Next due date</label><input type="date" id="f-duedate" value="${existing ? (existing.dueDate||'') : ''}"></div>
+        <div class="pc-modal-actions"><button class="pc-btn-secondary" id="pc-cancel">Cancel</button><button class="pc-btn-primary" id="pc-save">${existing ? 'Save changes' : 'Add card'}</button></div>
+      </div></div>`;
+    document.getElementById('pc-cancel').addEventListener('click', closeModal);
+    document.getElementById('pc-overlay').addEventListener('click', (e) => { if (e.target.id === 'pc-overlay') closeModal(); });
+    document.getElementById('pc-save').addEventListener('click', submitCardModal);
+  }
+
+  function openInvestModal(id) {
+    const existing = id ? positions.find(p => p.id === id) : null;
+    const mount = document.getElementById('pc-modal-mount');
+    mount.innerHTML = `
+      <div class="pc-overlay" id="pc-overlay"><div class="pc-modal">
+        <h3>${existing ? 'Edit position' : 'Add a position'}</h3>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Ticker symbol</label><input type="text" id="f-ticker" placeholder="e.g. AAPL" value="${existing ? escapeHtml(existing.ticker) : ''}"></div>
+          <div class="pc-field"><label>Account</label><input type="text" id="f-account" placeholder="Robinhood" value="${existing ? escapeHtml(existing.account) : 'Robinhood'}"></div>
+        </div>
+        <div class="pc-field"><label>Shares</label><input type="number" step="0.0001" id="f-shares" value="${existing ? existing.shares : ''}"></div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Average cost / share ($)</label><input type="number" step="0.01" id="f-cost" value="${existing ? existing.costBasis : ''}"></div>
+          <div class="pc-field"><label>Current price / share ($)</label><input type="number" step="0.01" id="f-price" value="${existing ? existing.currentPrice : ''}"></div>
+        </div>
+        <div class="pc-modal-actions"><button class="pc-btn-secondary" id="pc-cancel">Cancel</button><button class="pc-btn-primary" id="pc-save">${existing ? 'Save changes' : 'Add position'}</button></div>
+      </div></div>`;
+    document.getElementById('pc-cancel').addEventListener('click', closeModal);
+    document.getElementById('pc-overlay').addEventListener('click', (e) => { if (e.target.id === 'pc-overlay') closeModal(); });
+    document.getElementById('pc-save').addEventListener('click', submitInvestModal);
+  }
+
+  function openCashModal(id) {
+    const existing = id ? cashAccounts.find(a => a.id === id) : null;
+    const today = new Date().toISOString().slice(0,10);
+    const mount = document.getElementById('pc-modal-mount');
+    mount.innerHTML = `
+      <div class="pc-overlay" id="pc-overlay"><div class="pc-modal">
+        <h3>${existing ? 'Edit account' : 'Add a checking account'}</h3>
+        <div class="pc-field"><label>Account nickname</label><input type="text" id="f-caname" placeholder="e.g. Green Parrot Operating" value="${existing ? escapeHtml(existing.name) : ''}"></div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Bank</label><input type="text" id="f-cabank" placeholder="Regions" value="${existing ? escapeHtml(existing.bank) : 'Regions'}"></div>
+          <div class="pc-field"><label>Last 4 of account #</label><input type="text" id="f-calast4" maxlength="4" placeholder="1234" value="${existing ? escapeHtml(existing.last4) : ''}"></div>
+        </div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Current balance ($)</label><input type="number" step="0.01" id="f-cabalance" value="${existing ? existing.balance : ''}"></div>
+          <div class="pc-field"><label>Target minimum ($, optional)</label><input type="number" step="0.01" id="f-camin" value="${existing ? (existing.targetMin||'') : ''}"></div>
+        </div>
+        <div class="pc-field"><label>Balance as of</label><input type="date" id="f-caasof" value="${existing ? (existing.asOf||today) : today}"></div>
+        <div class="pc-modal-actions"><button class="pc-btn-secondary" id="pc-cancel">Cancel</button><button class="pc-btn-primary" id="pc-save">${existing ? 'Save changes' : 'Add account'}</button></div>
+      </div></div>`;
+    document.getElementById('pc-cancel').addEventListener('click', closeModal);
+    document.getElementById('pc-overlay').addEventListener('click', (e) => { if (e.target.id === 'pc-overlay') closeModal(); });
+    document.getElementById('pc-save').addEventListener('click', submitCashModal);
+  }
+
+  function closeModal() { document.getElementById('pc-modal-mount').innerHTML = ''; editingId = null; }
+
+  function openBudgetModal() {
+    // Reference math shown for transparency — based on take-home pay described (two paychecks/month)
+    // minus the two big fixed bills mentioned. This is shown so the person can judge the number
+    // against their OWN remaining expenses (groceries, utilities, insurance, savings, other debts)
+    // that this app has no way of knowing about.
+    const paycheck = 2800;
+    const monthlyIncome = paycheck * 2;
+    const mortgage = 2000;
+    const carLease = 580;
+    const fixedBills = mortgage + carLease;
+    const leftover = monthlyIncome - fixedBills;
+    const current = Number(budget.extraForDebt) || 0;
+    const mount = document.getElementById('pc-modal-mount');
+    mount.innerHTML = `
+      <div class="pc-overlay" id="pc-overlay"><div class="pc-modal">
+        <h3>Payoff budget</h3>
+        <div class="pc-manual-note" style="margin-bottom:16px;">
+          <b>The math, shown plainly:</b><br>
+          ${fmtMoney(paycheck)}/paycheck × 2 paychecks = ${fmtMoney(monthlyIncome)}/month take-home<br>
+          − ${fmtMoney(mortgage)} mortgage − ${fmtMoney(carLease)} Volvo lease = ${fmtMoney(fixedBills)} in known fixed bills<br>
+          <b>= ${fmtMoney(leftover)}/month left</b> for groceries, utilities, insurance, savings, other debts, and anything extra toward these cards.<br><br>
+          This app doesn't know your other monthly expenses, so it won't guess how much of that ${fmtMoney(leftover)} is really free. Set the amount YOU can commit each month beyond minimum payments below — that's what "Recommended" payoff times are built from, within whichever ledger you're viewing.
+        </div>
+        <div class="pc-field">
+          <label>Extra $ per month toward debt (this ledger)</label>
+          <input type="number" step="10" min="0" id="f-extra-debt" value="${current || ''}" placeholder="e.g. 300">
+        </div>
+        <div class="pc-modal-actions">
+          <button class="pc-btn-secondary" id="pc-cancel">Cancel</button>
+          <button class="pc-btn-primary" id="pc-save">Save</button>
+        </div>
+      </div></div>`;
+    document.getElementById('pc-cancel').addEventListener('click', closeModal);
+    document.getElementById('pc-overlay').addEventListener('click', (e) => { if (e.target.id === 'pc-overlay') closeModal(); });
+    document.getElementById('pc-save').addEventListener('click', async () => {
+      budget.extraForDebt = Math.max(0, parseFloat(document.getElementById('f-extra-debt').value) || 0);
+      await saveToCloud();
+      closeModal();
+      render();
+      showToast('Payoff budget updated');
+    });
+  }
+
+  function openFixedBillModal(id) {
+    const existing = id ? fixedBills.find(b => b.id === id) : null;
+    const mount = document.getElementById('pc-modal-mount');
+    mount.innerHTML = `
+      <div class="pc-overlay" id="pc-overlay"><div class="pc-modal">
+        <h3>${existing ? 'Edit fixed bill' : 'Add a fixed bill'}</h3>
+        <div class="pc-field"><label>Name</label><input type="text" id="f-fb-name" placeholder="e.g. Mortgage (1st half)" value="${existing ? escapeHtml(existing.name) : ''}"></div>
+        <div class="pc-row2">
+          <div class="pc-field"><label>Amount ($)</label><input type="number" step="0.01" id="f-fb-amount" value="${existing ? existing.amount : ''}"></div>
+          <div class="pc-field"><label>Due day of month (1–31)</label><input type="number" min="1" max="31" id="f-fb-day" value="${existing ? existing.dueDay : ''}"></div>
+        </div>
+        <div class="pc-modal-actions">
+          ${existing ? `<button class="pc-btn-secondary" id="pc-fb-delete" style="border-color:var(--danger); color:var(--danger);">Delete</button>` : ''}
+          <button class="pc-btn-secondary" id="pc-cancel">Cancel</button>
+          <button class="pc-btn-primary" id="pc-save">${existing ? 'Save changes' : 'Add bill'}</button>
+        </div>
+      </div></div>`;
+    document.getElementById('pc-cancel').addEventListener('click', closeModal);
+    document.getElementById('pc-overlay').addEventListener('click', (e) => { if (e.target.id === 'pc-overlay') closeModal(); });
+    if (existing) {
+      document.getElementById('pc-fb-delete').addEventListener('click', async () => {
+        fixedBills = fixedBills.filter(b => b.id !== existing.id);
+        await saveToCloud();
+        closeModal(); render();
+        showToast('Fixed bill removed');
+      });
+    }
+    document.getElementById('pc-save').addEventListener('click', async () => {
+      const name = document.getElementById('f-fb-name').value.trim();
+      if (!name) { showToast('Give the bill a name first'); return; }
+      const data = {
+        id: existing ? existing.id : uid(),
+        name,
+        amount: parseFloat(document.getElementById('f-fb-amount').value) || 0,
+        dueDay: Math.min(31, Math.max(1, parseInt(document.getElementById('f-fb-day').value, 10) || 1))
+      };
+      if (existing) fixedBills = fixedBills.map(b => b.id === existing.id ? data : b);
+      else fixedBills.push(data);
+      await saveToCloud();
+      closeModal(); render();
+      showToast(existing ? 'Fixed bill updated' : 'Fixed bill added');
+    });
+  }
+
+  async function submitCardModal() {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { showToast('Give the card a name first'); return; }
+    const data = {
+      id: editingId || uid(), name,
+      last4: document.getElementById('f-last4').value.trim().slice(-4),
+      group: document.getElementById('f-group').value,
+      balance: parseFloat(document.getElementById('f-balance').value) || 0,
+      limit: parseFloat(document.getElementById('f-limit').value) || 0,
+      apr: parseFloat(document.getElementById('f-apr').value) || 0,
+      minDue: parseFloat(document.getElementById('f-mindue').value) || 0,
+      dueDate: document.getElementById('f-duedate').value || ''
+    };
+    if (editingId) cards = cards.map(c => c.id === editingId ? data : c);
+    else { cards.push(data); activeGroup = data.group; }
+    await saveCards(); closeModal(); render();
+    showToast(editingId ? 'Card updated' : 'Card added');
+  }
+
+  async function submitInvestModal() {
+    const ticker = document.getElementById('f-ticker').value.trim();
+    if (!ticker) { showToast('Add a ticker symbol first'); return; }
+    const data = {
+      id: editingId || uid(), ticker: ticker.toUpperCase(),
+      account: document.getElementById('f-account').value.trim() || 'Robinhood',
+      shares: parseFloat(document.getElementById('f-shares').value) || 0,
+      costBasis: parseFloat(document.getElementById('f-cost').value) || 0,
+      currentPrice: parseFloat(document.getElementById('f-price').value) || 0
+    };
+    if (editingId) positions = positions.map(p => p.id === editingId ? data : p);
+    else positions.push(data);
+    await savePositions(); closeModal(); render();
+    showToast(editingId ? 'Position updated' : 'Position added');
+  }
+
+  async function submitCashModal() {
+    const name = document.getElementById('f-caname').value.trim();
+    if (!name) { showToast('Give the account a nickname first'); return; }
+    const data = {
+      id: editingId || uid(), name,
+      bank: document.getElementById('f-cabank').value.trim() || 'Regions',
+      last4: document.getElementById('f-calast4').value.trim().slice(-4),
+      balance: parseFloat(document.getElementById('f-cabalance').value) || 0,
+      targetMin: parseFloat(document.getElementById('f-camin').value) || 0,
+      asOf: document.getElementById('f-caasof').value || new Date().toISOString().slice(0,10)
+    };
+    if (editingId) cashAccounts = cashAccounts.map(a => a.id === editingId ? data : a);
+    else cashAccounts.push(data);
+    await saveCash(); closeModal(); render();
+    showToast(editingId ? 'Account updated' : 'Account added');
+  }
+
+  document.getElementById('pc-sidebar').querySelectorAll('.pc-side-row').forEach(row => {
+    const g = row.dataset.group;
+    row.querySelector('.pc-side-text').addEventListener('click', () => {
+      if (!visibility[g]) { showToast('Turn this ledger on first'); return; }
+      activeGroup = g; render();
+    });
+    row.querySelector('[data-vis]').addEventListener('change', async (e) => {
+      const checked = e.target.checked;
+      const wouldBeVisible = LEDGER_DEFS.filter(([gg]) => gg === g ? checked : visibility[gg]);
+      if (wouldBeVisible.length === 0) {
+        e.target.checked = true;
+        showToast('Keep at least one ledger visible');
+        return;
+      }
+      visibility[g] = checked;
+      await saveVisibility();
+      if (!visibility[activeGroup]) {
+        const firstVisible = LEDGER_DEFS.find(([gg]) => visibility[gg]);
+        activeGroup = firstVisible ? firstVisible[0] : activeGroup;
+      }
+      render();
+    });
+  });
+  document.getElementById('pc-sort').addEventListener('change', (e) => {
+    if (sortPrefs.hasOwnProperty(activeGroup)) {
+      sortPrefs[activeGroup] = e.target.value;
+    }
+    render();
+  });
+  document.getElementById('pc-add-btn').addEventListener('click', () => openModal(null));
+  document.getElementById('pc-budget-btn').addEventListener('click', openBudgetModal);
+  document.getElementById('pc-pay-mode').addEventListener('change', () => { renderBillsSummary(); renderBillsView(); });
+  document.getElementById('pc-add-fixedbill-btn').addEventListener('click', () => openFixedBillModal(null));
+
+  document.getElementById('pc-export-btn').addEventListener('click', () => {
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      cards, positions, cashAccounts, visibility, budget, fixedBills, paidRecords
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'press-check-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Backup downloaded');
+  });
+
+  document.getElementById('pc-import-btn').addEventListener('click', () => {
+    document.getElementById('pc-import-file').click();
+  });
+
+  document.getElementById('pc-import-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if (!backup || (!backup.cards && !backup.positions && !backup.cashAccounts)) {
+        showToast('That file doesn\'t look like a Press Check backup');
+        return;
+      }
+      cards = Array.isArray(backup.cards) ? backup.cards : [];
+      positions = Array.isArray(backup.positions) ? backup.positions : [];
+      cashAccounts = Array.isArray(backup.cashAccounts) ? backup.cashAccounts : [];
+      fixedBills = Array.isArray(backup.fixedBills) ? backup.fixedBills : fixedBills;
+      paidRecords = Array.isArray(backup.paidRecords) ? backup.paidRecords : paidRecords;
+      if (backup.budget && typeof backup.budget === 'object') budget = backup.budget;
+      if (backup.visibility && typeof backup.visibility === 'object') {
+        visibility = backup.visibility;
+        LEDGER_DEFS.forEach(([g]) => { if (typeof visibility[g] !== 'boolean') visibility[g] = true; });
+      }
+      await saveToCloud();
+      render();
+      showToast('Backup restored');
+    } catch (err) {
+      showToast('Could not read that backup file');
+    }
+    e.target.value = '';
+  });
+
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      currentUid = user.uid;
+      document.getElementById('pc-login-screen').style.display = 'none';
+      document.getElementById('pc-app-wrap').style.display = '';
+      document.getElementById('pc-account-email').textContent = user.email || '';
+      await loadFromCloud();
+      attachLiveSync();
+    } else {
+      currentUid = null;
+      if (unsubscribeLive) { unsubscribeLive(); unsubscribeLive = null; }
+      document.getElementById('pc-login-screen').style.display = 'flex';
+      document.getElementById('pc-app-wrap').style.display = 'none';
+    }
+  });
+
+  function showLoginError(msg) {
+    const el = document.getElementById('pc-login-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  document.getElementById('pc-signin-btn').addEventListener('click', async () => {
+    const email = document.getElementById('pc-login-email').value.trim();
+    const pw = document.getElementById('pc-login-password').value;
+    if (!email || !pw) { showLoginError('Enter your email and password.'); return; }
+    try {
+      await auth.signInWithEmailAndPassword(email, pw);
+      document.getElementById('pc-login-error').style.display = 'none';
+    } catch (e) {
+      showLoginError(e.message || 'Could not sign in.');
+    }
+  });
+
+  document.getElementById('pc-logout-btn').addEventListener('click', async () => {
+    await auth.signOut();
+  });
+})();
+</script>
+</body>
+</html>
